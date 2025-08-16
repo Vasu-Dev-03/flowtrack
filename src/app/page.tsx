@@ -54,9 +54,9 @@ export default function FlowTrack() {
     const savedTransactions = localStorage.getItem("flowtrack-transactions")
     if (savedTransactions) {
       try {
-        const parsed = JSON.parse(savedTransactions)
+        const parsed: Transaction[] = JSON.parse(savedTransactions)
         // Convert date strings back to Date objects
-        const transactionsWithDates = parsed.map((t: any) => ({
+        const transactionsWithDates: Transaction[] = parsed.map((t) => ({
           ...t,
           date: new Date(t.date),
         }))
@@ -418,7 +418,10 @@ export default function FlowTrack() {
           </div>
 
           <div className="mb-4">
-            <Select value={historyFilter} onValueChange={(value) => setHistoryFilter(value as any)}>
+            <Select
+              value={historyFilter}
+              onValueChange={(value) => setHistoryFilter(value as TransactionType | "all")}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Filter transactions" />
               </SelectTrigger>
