@@ -18,6 +18,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* ✅ Add PWA manifest + theme color */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#0f172a" />
+
         <style>{`
 html {
   font-family: ${GeistSans.style.fontFamily};

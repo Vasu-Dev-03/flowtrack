@@ -15,6 +15,37 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
+// ✅ IndexedDB helpers
+import { openDB } from "idb"
+
+const DB_NAME = "sugrow-db"
+const STORE_NAME = "transactions"
+
+async function getDB() {
+  return openDB(DB_NAME, 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" })
+      }
+    },
+  })
+}
+
+async function addTransactionToDB(transaction: Transaction) {
+  const db = await getDB()
+  await db.put(STORE_NAME, transaction)
+}
+
+async function getAllTransactionsFromDB() {
+  const db = await getDB()
+  return db.getAll(STORE_NAME)
+}
+
+async function deleteTransactionFromDB(id: string) {
+  const db = await getDB()
+  return db.delete(STORE_NAME, id)
+}
+
 type TransactionType = "stock-in" | "stock-out" | "income" | "expense"
 
 interface Transaction {
@@ -50,13 +81,12 @@ export default function FlowTrack() {
 
   const [paymentType, setPaymentType] = useState<"income" | "expense">("income")
 
+  // ✅ Load from IndexedDB
   useEffect(() => {
-    const savedTransactions = localStorage.getItem("flowtrack-transactions")
-    if (savedTransactions) {
+    async function loadData() {
       try {
-        const parsed: Transaction[] = JSON.parse(savedTransactions)
-        // Convert date strings back to Date objects
-        const transactionsWithDates: Transaction[] = parsed.map((t) => ({
+        const saved = await getAllTransactionsFromDB()
+        const transactionsWithDates: Transaction[] = saved.map((t: Transaction & { date: string | Date }) => ({
           ...t,
           date: new Date(t.date),
         }))
@@ -65,13 +95,8 @@ export default function FlowTrack() {
         console.error("Error loading transactions:", error)
       }
     }
+    loadData()
   }, [])
-
-  useEffect(() => {
-    if (transactions.length > 0) {
-      localStorage.setItem("flowtrack-transactions", JSON.stringify(transactions))
-    }
-  }, [transactions])
 
   const resetForms = () => {
     setStockForm({
@@ -88,7 +113,7 @@ export default function FlowTrack() {
     })
   }
 
-  const handleStockSubmit = (type: "stock-in" | "stock-out") => {
+  const handleStockSubmit = async (type: "stock-in" | "stock-out") => {
     if (!stockForm.name || !stockForm.item || !stockForm.quantity) return
 
     const newTransaction: Transaction = {
@@ -101,16 +126,13 @@ export default function FlowTrack() {
       date: stockForm.date,
     }
 
-    setTransactions((prev) => {
-      const updated = [newTransaction, ...prev]
-      localStorage.setItem("flowtrack-transactions", JSON.stringify(updated))
-      return updated
-    })
+    await addTransactionToDB(newTransaction)
+    setTransactions((prev) => [newTransaction, ...prev])
     resetForms()
     setCurrentView("main")
   }
 
-  const handlePaymentSubmit = () => {
+  const handlePaymentSubmit = async () => {
     if (!paymentForm.name || !paymentForm.amount) return
 
     const newTransaction: Transaction = {
@@ -121,25 +143,15 @@ export default function FlowTrack() {
       date: paymentForm.date,
     }
 
-    setTransactions((prev) => {
-      const updated = [newTransaction, ...prev]
-      localStorage.setItem("flowtrack-transactions", JSON.stringify(updated))
-      return updated
-    })
+    await addTransactionToDB(newTransaction)
+    setTransactions((prev) => [newTransaction, ...prev])
     resetForms()
     setCurrentView("main")
   }
 
-  const deleteTransaction = (id: string) => {
-    setTransactions((prev) => {
-      const updated = prev.filter((t) => t.id !== id)
-      if (updated.length === 0) {
-        localStorage.removeItem("flowtrack-transactions")
-      } else {
-        localStorage.setItem("flowtrack-transactions", JSON.stringify(updated))
-      }
-      return updated
-    })
+  const deleteTransaction = async (id: string) => {
+    await deleteTransactionFromDB(id)
+    setTransactions((prev) => prev.filter((t) => t.id !== id))
   }
 
   const filteredTransactions = transactions.filter((t) => historyFilter === "all" || t.type === historyFilter)
@@ -168,6 +180,7 @@ export default function FlowTrack() {
     return <Badge className={cn("capitalize", variants[type])}>{type.replace("-", " ")}</Badge>
   }
 
+  // ✅ UI rendering blocks
   if (currentView === "main") {
     return (
       <div className="min-h-screen bg-background p-4">
